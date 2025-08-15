@@ -25,6 +25,13 @@
             <h3>Car List</h3>
             <ul class="car-list">
                 <li v-for="car in cars" :key="car.id">
+                    <Button
+                      @click="deleteCar(car.id)"
+                      aria-label="Delete"
+                      class="p-button-text p-button-rounded p-button-icon-only delete-btn"
+                    >
+                      <i class="pi pi-trash trash-icon" />
+                    </Button>
                     {{ car.brand }} ({{ car.licensePlate }})
                 </li>
             </ul>
@@ -62,12 +69,12 @@
     </div>
   </div>
 
-  <footer class="footer">
+  <!--<footer class="footer">
       <div class="footer-buttons">
         <Button label="Book" disabled class="shadow-3" style="width:150px; height: 50px;"/>
         <Button label="Cancel reservation" disabled class="shadow-3" style="width:150px; height: 50px;" />
       </div>
-  </footer>
+  </footer>-->
 </template>
 
 <script lang="ts" setup>
@@ -75,6 +82,7 @@
     import axios from 'axios';
     import { ref, onMounted } from 'vue';
     import { useUserStore } from '../stores/userStore';
+    import { useCarStore } from '../stores/carStore';
 
     type ParkingSpace = {
         id: number,
@@ -83,15 +91,16 @@
     }
     const parkingSpacesMap = ref<Record<string, boolean>>({})
 
+    const userStore = useUserStore();
+    const carStore = useCarStore(); 
+    const router = useRouter();
+
     type Car = {
         id: number;
         brand: string;
         licensePlate: string;
     };
-    const cars = ref<Car[]>([]);
-
-    const userStore = useUserStore();
-    const router = useRouter();
+    const cars = ref<Car[]>(carStore.cars);
 
     const logout = () => {
         userStore.logout();
@@ -100,6 +109,22 @@
 
     const addCar = () => {
         router.push('/addCar');
+    }
+
+    const deleteCar = async (id: number) => {
+      try {
+            await axios.delete(`http://localhost:8080/cars/${id}`)
+            carStore.removeCar(id)
+            try{
+              const id = userStore.user?.id
+              const response = await axios.get(`http://localhost:8080/users/${id}/cars`)
+              cars.value = response.data;
+            } catch(error){
+              console.error('Ошибка при обновлении списка машин после удаления машины:', error)
+            }
+        } catch (error) {
+            console.error('Ошибка при удалении машины:', error)
+      }
     }
 
     onMounted(async () => {
@@ -132,7 +157,6 @@
             const response = await axios.get(`http://localhost:8080/users/${id}/cars`);
             if (response.data){
                 cars.value = response.data;
-                console.log(cars.value);
             }
         } catch (error: any) {
             console.error("Ошибка загрузки машин", error.message);
@@ -186,6 +210,11 @@
   border-bottom: 1px solid #ccc;
 }
 
+/* Красная иконка */
+.trash-icon {
+  color: red;
+}
+
 .side-grid {
   display: grid;
   grid-template-columns: repeat(3, 70px); /* 3 блока в ряд */
@@ -216,7 +245,7 @@
   background-color: #0fb80fff; /* светло-зелёный */
 }
 
-.footer {
+/*.footer {
   padding: 1rem;
   background-color: #f8f9fa;
   text-align: center;
@@ -226,6 +255,6 @@
 .footer-buttons {
     display: inline-flex;
     gap: 3rem;
-}
+}*/
 
 </style>
