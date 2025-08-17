@@ -1,7 +1,7 @@
 <template>
   
   <div class="flex align-items-start justify-content-center min-h-screen surface-ground">
-    <div class="surface-200 p-5 shadow-2" style="width: 1000px; height: 500px;">
+    <div class="surface-200 p-5 shadow-2" style="width: 1000px; height: 800px;">
       <div class="header-container">
         <Button
                 icon="pi pi-arrow-left"
@@ -45,22 +45,34 @@
       <br>
       
       <Button label="Book" class="mt-4 shadow-2" severity="primary" style="width: 180px;" @click="checkData" />
+
+      <div class="mt-6 shadow-2">
+        <h3>All bookings:</h3>
+        <ul class="list">
+          <li v-for="res in reservs" :key="res.id" class="mb-2">
+            {{ res.timeFrom }} - {{ res.timeTo }}
+          </li>
+        </ul>
+      </div>
       
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-    import { ref, watch } from 'vue';
+    import { ref, watch, onMounted } from 'vue';
     import axios from 'axios';
     import { useRouter } from 'vue-router';
     import { useUserStore } from '../stores/userStore';
     import { useParkingStore } from '../stores/parkingStore';
     import DatePicker from 'primevue/datepicker';
+    import { Reservation } from '../views/ParkingSpacesView.vue';
 
     const router = useRouter();
     const userStore = useUserStore();
     const parkingStore = useParkingStore();
+
+    const reservs = ref<Reservation[]>();
 
     const goBack = () => {
         router.push('/main');
@@ -109,6 +121,19 @@
             alert("Ошибка добавления бронирования");
         }
     };
+
+    onMounted(async () => {
+        try {
+            const id = parkingStore.parkingSpace?.id
+            const response = await axios.get(`http://localhost:8080/parking_spaces/${id}/reservs`);
+            if (response.data){
+                reservs.value = response.data;
+                console.log(reservs.value.length);
+            }
+        } catch (error: any) {
+            console.error(`Ошибка загрузки бронирований места ${parkingStore.parkingSpace?.location}`, error.message);
+        }
+    });
 </script>
 
 <style scoped>
@@ -132,4 +157,9 @@
     .field-group label {
         white-space: nowrap;
     }
+
+   .mt-6 {
+        width: 280px;
+        margin: 0 auto;
+   }
 </style>

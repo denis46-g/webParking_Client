@@ -129,7 +129,7 @@
     };
     const cars = ref<Car[]>(carStore.cars);
 
-    type Reservation = {
+    export type Reservation = {
         id: number;
         parkingSpaceId: number;
         timeFrom: string;
