@@ -12,7 +12,7 @@
     </header>
   <div class="page-container">
 
-    <div class="left-panel">
+    <div class="panel">
         <Button
             label="Add Car"
             class="shadow-3"
@@ -21,9 +21,9 @@
             @click="addCar"
         />
 
-        <div class="car-list-container">
+        <div class="list-container">
             <h3>Car List</h3>
-            <ul class="car-list">
+            <ul class="list">
                 <li v-for="car in cars" :key="car.id">
                     <Button
                       @click="deleteCar(car.id)"
@@ -38,62 +38,89 @@
         </div>
     </div>
     
-    <!-- Левая часть -->
     <div class="side-grid">
       <div
         v-for="n in 12"
         :key="'A' + n"
         class="square"
         :class="{
-            'occupied': parkingSpacesMap['A' + n],
-            'available': parkingSpacesMap['A' + n] === false
+            'chosen': parkingSpacesChosen['A' + n]
         }"
+        @click="chooseParkingSpace('A' + n)"
       >
         A{{ n }}
       </div>
     </div>
 
-    <!-- Правая часть -->
     <div class="side-grid">
       <div
         v-for="n in 12"
         :key="'B' + n"
         class="square"
         :class="{
-            'occupied': parkingSpacesMap['B' + n],
-            'available': parkingSpacesMap['B' + n] === false
+            'chosen': parkingSpacesChosen['B' + n]
         }"
+        @click="chooseParkingSpace('B' + n)"
       >
         B{{ n }}
       </div>
     </div>
-  </div>
 
-  <!--<footer class="footer">
-      <div class="footer-buttons">
-        <Button label="Book" disabled class="shadow-3" style="width:150px; height: 50px;"/>
-        <Button label="Cancel reservation" disabled class="shadow-3" style="width:150px; height: 50px;" />
-      </div>
-  </footer>-->
+    <div class="panel">
+        <Button
+            label="Book"
+            class="shadow-3"
+            :class="{
+              'booking-active': isAnyParkingSpaceChosen
+            }"
+            style="width: 100%; height: 50px;"
+            :disabled="!isAnyParkingSpaceChosen"
+            @click="bookParkingSpace"
+        />
+
+        <div class="list-container">
+            <h3>Reservation List</h3>
+            <ul class="list">
+                <li v-for="res in reservs" :key="res.id">
+                    <Button
+                      @click="deleteReservation(res.id)"
+                      aria-label="Delete"
+                      class="p-button-text p-button-rounded p-button-icon-only delete-btn"
+                    >
+                      <i class="pi pi-trash trash-icon" />
+                    </Button>
+                    {{parkingSpacesLocations[res.parkingSpaceId]}} {{res.timeFrom}} - {{res.timeTo}}
+                </li>
+            </ul>
+        </div>
+    </div>
+
+  </div>
 </template>
 
 <script lang="ts" setup>
     import { useRouter } from 'vue-router';
     import axios from 'axios';
-    import { ref, onMounted } from 'vue';
+    import { ref, onMounted, reactive, computed } from 'vue';
     import { useUserStore } from '../stores/userStore';
     import { useCarStore } from '../stores/carStore';
+    import { useReservStore } from '../stores/reservStore';
+    import { useParkingStore } from '../stores/parkingStore';
+
+    const userStore = useUserStore();
+    const carStore = useCarStore();
+    const reservStore = useReservStore();
+    const parkingStore = useParkingStore();
+    const router = useRouter();
 
     type ParkingSpace = {
         id: number,
         location: string,
         isOccupied: boolean
     }
-    const parkingSpacesMap = ref<Record<string, boolean>>({})
-
-    const userStore = useUserStore();
-    const carStore = useCarStore(); 
-    const router = useRouter();
+    const parkingSpacesLocations = ref<Record<number, string>>({})
+    const parkingSpacesKeys = ref<Record<string, number>>({})
+    const parkingSpacesChosen = reactive<Record<string, boolean>>({})
 
     type Car = {
         id: number;
@@ -102,7 +129,17 @@
     };
     const cars = ref<Car[]>(carStore.cars);
 
+    type Reservation = {
+        id: number;
+        parkingSpaceId: number;
+        timeFrom: string;
+        timeTo: string;
+        userId: number;
+    };
+    const reservs = ref<Reservation[]>(reservStore.reservs);
+
     const logout = () => {
+        parkingStore.logout();
         userStore.logout();
         router.push('/login');
     };
@@ -127,16 +164,67 @@
       }
     }
 
+    const chooseParkingSpace = (location: string) => {
+      parkingSpacesChosen[location] = !parkingSpacesChosen[location];
+      
+      for (const key in parkingSpacesChosen) {
+        if (key !== location && parkingSpacesChosen[key] === true) {
+          parkingSpacesChosen[key] = false;
+        }
+      }
+
+      parkingStore.chooseParkingSpace(parkingSpacesKeys.value[location], location);
+    }
+
+    const isAnyParkingSpaceChosen = computed(() => {
+      return Object.values(parkingSpacesChosen).some(value => value === true);
+    });
+
+    const bookParkingSpace = () => {
+      router.push('/bookParkingSpace');
+    }
+
+    const deleteReservation = async (id: number) => {
+      try {
+            await axios.delete(`http://localhost:8080/reservations/${id}`)
+            reservStore.removeReservation(id)
+            try{
+              const id = userStore.user?.id
+              const response = await axios.get(`http://localhost:8080/users/${id}/reservs`)
+              reservs.value = response.data;
+            } catch(error){
+              console.error('Ошибка при обновлении списка бронирований после удаления бронирования:', error)
+            }
+        } catch (error) {
+            console.error('Ошибка при удалении бронирования:', error)
+      }
+    }
+
     onMounted(async () => {
         try {
             const response = await axios.get('http://localhost:8080/parking_spaces');
 
             if (response.data) {
                 const data: ParkingSpace[] = response.data;
-                
-                parkingSpacesMap.value = Object.fromEntries(
-                    data.map(space => [space.location, space.isOccupied])
+
+                parkingSpacesLocations.value = Object.fromEntries(
+                    data.map(space => [space.id, space.location])
                 );
+
+                parkingSpacesKeys.value = Object.fromEntries(
+                    data.map(space => [space.location, space.id])
+                );
+                
+                if(parkingStore.parkingSpace == null){
+                  Object.assign(parkingSpacesChosen, Object.fromEntries(
+                    data.map(space => [space.location, false])
+                  ));
+                }
+                else{
+                  Object.assign(parkingSpacesChosen, Object.fromEntries(
+                    data.map(space => [space.location, space.id == parkingStore.parkingSpace.id])
+                  ));
+                }
 
             } else {
                 alert("Ошибка");
@@ -161,6 +249,16 @@
         } catch (error: any) {
             console.error("Ошибка загрузки машин", error.message);
         }
+
+        try {
+            const id = userStore.user?.id
+            const response = await axios.get(`http://localhost:8080/users/${id}/reservs`);
+            if (response.data){
+                reservs.value = response.data;
+            }
+        } catch (error: any) {
+            console.error("Ошибка загрузки бронирований", error.message);
+        }
     });
 </script>
 
@@ -184,33 +282,31 @@
 .page-container {
   display: flex;
   justify-content: space-between;
-  gap: 12rem;
+  gap: 6rem;
 }
 
-.left-panel {
+.panel {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  min-width: 250px;
-  padding: 1rem;
+  min-width: 230px;
+  padding: 1rem 0rem 1rem 0rem;
 }
 
-.car-list-container {
+.list-container {
   margin-top: 1rem;
 }
 
-.car-list {
+.list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.car-list li {
+.list li {
   padding: 0.5rem 0;
   border-bottom: 1px solid #ccc;
 }
 
-/* Красная иконка */
 .trash-icon {
   color: red;
 }
@@ -237,24 +333,16 @@
   color: #333;
 }
 
-.occupied {
-  background-color: #c32727ff; /* светло-красный */
+.chosen {
+  background-color: #333;
+  border: 1px solid #999;
+  color: #ffffff;
 }
 
-.available {
-  background-color: #0fb80fff; /* светло-зелёный */
+.booking-active, .booking-active:hover {
+  background-color: #333 !important;
+  border: 1px solid #999 !important;
+  color: #ffffff !important;
 }
-
-/*.footer {
-  padding: 1rem;
-  background-color: #f8f9fa;
-  text-align: center;
-  margin-top: 30px;
-}
-
-.footer-buttons {
-    display: inline-flex;
-    gap: 3rem;
-}*/
 
 </style>
