@@ -16,7 +16,7 @@
       
       <div class="flex-row-container mt-5">
         <div class="field-group">
-            <label for="time_from" class="mr-5">От</label>
+            <label for="time_from" class="mr-5">From</label>
             <DatePicker
                 id="time_from"
                 v-model="time_from_date"
@@ -29,7 +29,7 @@
         </div>
 
         <div class="field-group ml-4">
-            <label for="time_to" class="mr-5">До</label>
+            <label for="time_to" class="mr-5">To</label>
             <DatePicker
                 id="time_to"
                 v-model="time_to_date"
